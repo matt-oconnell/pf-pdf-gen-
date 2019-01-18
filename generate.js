@@ -3,21 +3,34 @@ const fs = require('fs');
 const pdf = require('html-pdf');
 const html = fs.readFileSync('test.html', 'utf8');
 
-async function getAllLinksFromGrid(page) {
-  return await page.evaluate(() => {
-    const links = [];
-    const productEls = document.getElementsByClassName('woocommerce-LoopProduct-link');
-    for(var i = 0; i < productEls.length; i++) {
-      links.push(productEls[i].getAttribute('href').split('/?')[0]);
-    }
-    return links;
-  });
+async function getAllLinksFromGrid(page, isNewArrivals) {
+  if (isNewArrivals) {
+    return await page.evaluate(() => {
+      const links = [];
+      const newArrivals = document.getElementsByClassName('featured-items');
+      const productEls = newArrivals[0].getElementsByClassName('woocommerce-LoopProduct-link');
+      for (var i = 0; i < productEls.length; i++) {
+        links.push(productEls[i].getAttribute('href').split('/?')[0]);
+      }
+      return links;
+    });
+  }
+  else {
+    return await page.evaluate(() => {
+      const links = [];
+      const productEls = document.getElementsByClassName('woocommerce-LoopProduct-link');
+      for (var i = 0; i < productEls.length; i++) {
+        links.push(productEls[i].getAttribute('href').split('/?')[0]);
+      }
+      return links;
+    });
+  }
 }
 
 async function scrapePage(page) {
   return await page.evaluate(() => {
     const scrapedData = {
-      alternate: '',
+      alternate: undefined,
     };
     scrapedData['patternName'] = document.getElementsByClassName('entry-title')[0].innerText;
     [
@@ -28,12 +41,13 @@ async function scrapePage(page) {
     scrapedData['img'] = document.getElementsByClassName('jsZoom')[0].getAttribute('data-zoom');
     
     const htmlText = document.getElementsByTagName('html')[0].innerHTML;
-    if (htmlText.search('in Fabrics')) {
+    if (htmlText.search('in Fabrics') !== -1) {
       scrapedData['alternate'] = 'fabric';
     }
-    if (htmlText.search('in Wallcoverings')) {
+    if (htmlText.search('in Wallcoverings') !== -1) {
       scrapedData['alternate'] = 'wallpaper';
     }
+    // scrapedData['alternate'] = 'fabric'
     return scrapedData;
   });
 }
@@ -73,8 +87,8 @@ async function createPdf(scrapedData) {
     format: 'Letter',
     quality: '100',
   };
-  
-  await pdf.create(replacedHtml, options).toFile(`./pdfs/${scrapedData.patternName}-${scrapedData.sku.split(' - ').join('-')}.pdf`, function(err, res) {
+  const fileName = `${scrapedData.patternName}-${scrapedData.sku.split(' - ').join('-')}`.replace('/', ':');
+  await pdf.create(replacedHtml, options).toFile(`./pdfs-wallcoverings-new-arrivals2/${fileName}.pdf`, function(err, res) {
     if (err) return console.log(err);
     console.log(res);
   });
@@ -84,10 +98,10 @@ async function createPdf(scrapedData) {
   const browser = await puppeteer.launch();
   const page = await browser.newPage();
 
-  await page.goto('https://peterfasano.com/fabrics/');
+  await page.goto('https://peterfasano.com/wallcoverings/');
 
   await page.waitForSelector('.woocommerce-LoopProduct-link');
-  const links = await getAllLinksFromGrid(page);
+  const links = await getAllLinksFromGrid(page, true);
 
   for (link of links) {
     await page.goto(link);
